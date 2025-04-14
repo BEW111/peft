@@ -1184,10 +1184,10 @@ class PeftModel(PushToHubMixin, torch.nn.Module):
                             for lora_key, lora_val in lora_dict.items():
                                 divide = lora_key.rfind(".")
                                 new_key = lora_key[:divide] + f".{adapter_name}" + lora_key[divide:]
-                                safe_dict[new_key] = lora_val
+                                safe_dict[new_key] = lora_val.contiguous()  # TODO BEW111: why is this needed?
                         else:
                             final_key = prefix + block_id + safe_key
-                        safe_dict[final_key] = safe_tensor
+                        safe_dict[final_key] = safe_tensor.contiguous()  # TODO BEW111: why is this needed?
                     files_seen.add(new_fname)
 
                     # avoid overwriting original safetensors
