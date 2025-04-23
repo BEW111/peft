@@ -12,9 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from peft.utils import register_peft_method
+
 from .config import LoReftConfig
 from .layer import Linear, LoReftLayer
 from .model import LoReftModel
 
 
 __all__ = ["Linear", "LoReftConfig", "LoReftLayer", "LoReftModel"]
+
+register_peft_method(name="loreft", config_cls=LoReftConfig, model_cls=LoReftModel)
