@@ -66,7 +66,7 @@ class LoReftModel(LycorisTuner):
         - **peft_config** ([`LoReftConfig`]): The configuration of the LoReFT model.
     """
 
-    prefix: str = "reft_"
+    prefix: str = "loreft_"
     layers_mapping: dict[type[torch.nn.Module], type[LoReftLayer]] = {
         torch.nn.Linear: Linear,
     }
