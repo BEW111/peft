@@ -38,7 +38,7 @@ def parse_positions(positions: str):
 
 class LoReftLayer(nn.Module, LycorisLayer):
     # All names of layers that may contain adapter weights
-    adapter_layer_names = ("reft_A", "reft_R")
+    adapter_layer_names = ("loreft_A", "loreft_R")
     # other_param_names is defined on parent class
 
     def __init__(self, base_layer: nn.Module):
@@ -47,8 +47,8 @@ class LoReftLayer(nn.Module, LycorisLayer):
 
         # TODO BEW111: document what the different attributes here are
         # ReFT info
-        self.reft_A = nn.ModuleDict({})
-        self.reft_R = nn.ModuleDict({})
+        self.loreft_A = nn.ModuleDict({})
+        self.loreft_R = nn.ModuleDict({})
         self.loc = {}
         self.first_n = {}
         self.last_n = {}
@@ -64,12 +64,16 @@ class LoReftLayer(nn.Module, LycorisLayer):
 
     @property
     def _available_adapters(self) -> Set[str]:
-        return {*self.reft_A, *self.reft_R}
+        return {*self.loreft_A, *self.loreft_R}
 
     def create_adapter_parameters(self, adapter_name: str, r: int):
         rotate_layer = torch.nn.Linear(self.out_features, r, bias=False)
-        self.reft_R[adapter_name] = torch.nn.utils.parametrizations.orthogonal(rotate_layer, orthogonal_map="cayley")
-        self.reft_A[adapter_name] = torch.nn.Linear(self.out_features, r)
+        self.loreft_R[adapter_name] = torch.nn.utils.parametrizations.orthogonal(rotate_layer, orthogonal_map="cayley")
+        self.loreft_A[adapter_name] = torch.nn.Linear(self.out_features, r)
+
+    def reset_adapter_parameters(self, adapter_name: str):
+        ...
+        # TODO BEW111: don't think I need to do this, but check anyway
 
     def merge(self, safe_merge: bool = False, adapter_names: Optional[list[str]] = None) -> None:
         # TODO BEW111: might be nice to eventually support merging via a specific methodd
@@ -112,8 +116,8 @@ class LoReftLayer(nn.Module, LycorisLayer):
 
         # Initialize weights
         # TODO BEW111: use self._move_adapter_to_device_of_base_layer(adapter_name) for this
-        if adapter_name in self.reft_A.keys():
-            nn.init.kaiming_uniform_(self.reft_A[adapter_name].weight, a=math.sqrt(5))
+        if adapter_name in self.loreft_A.keys():
+            nn.init.kaiming_uniform_(self.loreft_A[adapter_name].weight, a=math.sqrt(5))
 
         # Move new weights to device
         weight = getattr(self.get_base_layer(), "weight", None)
@@ -142,8 +146,8 @@ class LoReftLayer(nn.Module, LycorisLayer):
                 if active_adapter not in self._available_adapters:
                     continue
 
-                rotate_layer = self.reft_R[active_adapter]
-                learned_source = self.reft_A[active_adapter]
+                rotate_layer = self.loreft_R[active_adapter]
+                learned_source = self.loreft_A[active_adapter]
                 dropout = self.dropout[active_adapter]
 
                 result = result.to(torch.float32)
@@ -152,7 +156,7 @@ class LoReftLayer(nn.Module, LycorisLayer):
                     rotated_base = rotate_layer(result)  # Rh
 
                     # TODO BEW111: i think we might get an error here if R is not square
-                    offset = rotate_layer(learned_source(result) - rotated_base)  # R^T (Wh + b - Rh)
+                    offset = (learned_source(result) - rotated_base) @ rotate_layer.weight  # R^T (Wh + b - Rh)
                     output = result + offset  # \Phi(h) = h + R^T (Wh + b - Rh)
                 else:
                     first_n = self.first_n[active_adapter]

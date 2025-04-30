@@ -84,6 +84,7 @@ class LoReftModel(LycorisTuner):
         A private method to create and replace the target module with the adapter module.
         """
 
+        # TODO BEW111: what is this?
         # Regexp matching - Find key which matches current target_name in patterns provided
         pattern_keys = list(config.rank_pattern.keys())
         target_name_key = next(filter(lambda key: re.match(rf"(.*\.)?{key}$", current_key), pattern_keys), target_name)
