@@ -68,7 +68,10 @@ class LoReftLayer(nn.Module, LycorisLayer):
 
     def create_adapter_parameters(self, adapter_name: str, r: int):
         rotate_layer = torch.nn.Linear(self.out_features, r, bias=False)
-        self.loreft_R[adapter_name] = torch.nn.utils.parametrizations.orthogonal(rotate_layer, orthogonal_map="cayley")
+        # TODO BEW111: we have to use `use_trivialization=False` to avoid issues with mixed precision
+        self.loreft_R[adapter_name] = torch.nn.utils.parametrizations.orthogonal(
+            rotate_layer, orthogonal_map="cayley", use_trivialization=False
+        )
         self.loreft_A[adapter_name] = torch.nn.Linear(self.out_features, r)
 
     def reset_adapter_parameters(self, adapter_name: str):
@@ -153,6 +156,7 @@ class LoReftLayer(nn.Module, LycorisLayer):
                 result = result.to(torch.float32)
                 if self.first_n[active_adapter] == 0 and self.last_n[active_adapter] == 0:
                     # Implementing equation (2) from https://arxiv.org/pdf/2404.03592: \Phi(h) = h + R^T (Wh + b - Rh)
+                    # TODO BEW111: getting an error here when running on gpu
                     rotated_base = rotate_layer(result)  # Rh
 
                     # TODO BEW111: i think we might get an error here if R is not square
