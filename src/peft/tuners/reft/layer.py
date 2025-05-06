@@ -68,10 +68,8 @@ class LoReftLayer(nn.Module, LycorisLayer):
 
     def create_adapter_parameters(self, adapter_name: str, r: int):
         rotate_layer = torch.nn.Linear(self.out_features, r, bias=False)
-        # TODO BEW111: we have to use `use_trivialization=False` to avoid issues with mixed precision
-        self.loreft_R[adapter_name] = torch.nn.utils.parametrizations.orthogonal(
-            rotate_layer, orthogonal_map="cayley", use_trivialization=False
-        )
+        # TODO BEW111: should we use `use_trivialization=False` here?
+        self.loreft_R[adapter_name] = torch.nn.utils.parametrizations.orthogonal(rotate_layer, orthogonal_map="cayley")
         self.loreft_A[adapter_name] = torch.nn.Linear(self.out_features, r)
 
     def reset_adapter_parameters(self, adapter_name: str):
@@ -159,17 +157,22 @@ class LoReftLayer(nn.Module, LycorisLayer):
                     # TODO BEW111: getting an error here when running on gpu
                     rotated_base = rotate_layer(result)  # Rh
 
-                    # TODO BEW111: i think we might get an error here if R is not square
+                    # TODO BEW111: i don't like having to use `.weight` here directly
                     offset = (learned_source(result) - rotated_base) @ rotate_layer.weight  # R^T (Wh + b - Rh)
                     output = result + offset  # \Phi(h) = h + R^T (Wh + b - Rh)
                 else:
                     first_n = self.first_n[active_adapter]
                     last_n = self.last_n[active_adapter]
-                    loc = torch.cat([torch.arange(first_n), torch.arange(result.shape[1] - last_n, result.shape[1])])
+                    loc = torch.cat(
+                        [
+                            # TODO BEW111: see if there's a cleaner way to get the device
+                            torch.arange(first_n, device=result.device),
+                            torch.arange(result.shape[1] - last_n, result.shape[1], device=result.device),
+                        ]
+                    )
                     selected_results = torch.gather(result, 1, loc)
                     rotated_base = rotate_layer(selected_results)
-                    # TODO BEW111: also update this
-                    offset = torch.matmul((learned_source(selected_results) - rotated_base), rotate_layer.weight)
+                    offset = (learned_source(selected_results) - rotated_base) @ rotate_layer.weight
                     output.scatter_(1, loc, offset)
                 output = dropout(output)
         output = output.to(previous_dtype)
