@@ -174,7 +174,7 @@ class LoReftLayer(nn.Module, LycorisLayer):
                     )
                     # selected_results shape: (batch_size, new seq_len, out_features)
                     # selected_results = torch.gather(result, 1, loc)
-                    selected_results = torch.index_select(result, dim=1, index=loc.reshape(1, -1))
+                    selected_results = torch.index_select(result, dim=1, index=loc)
                     # selected_results = torch.index_select(result, dim=1, index=loc)
                     # rotate_layer weight shape: (out_features, r)
                     # rotated base shape: (batch_size, new seq_len, r)
