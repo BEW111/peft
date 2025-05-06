@@ -182,7 +182,8 @@ class LoReftLayer(nn.Module, LycorisLayer):
                     # offset shape: (batch_size, new seq_len, out_features)
                     offset = (learned_source(selected_results) - rotated_base) @ rotate_layer.weight
                     # output shape: (batch_size, seq_len, out_features)
-                    output.scatter_(1, loc, offset)
+                    output = result.clone()
+                    output.scatter_(1, loc, offset + selected_results)
                 output = dropout(output)
         output = output.to(previous_dtype)
         return output
