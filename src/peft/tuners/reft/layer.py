@@ -109,7 +109,7 @@ class LoReftLayer(nn.Module, LycorisLayer):
         self.first_n[adapter_name] = first_n
         self.last_n[adapter_name] = last_n
         self.alpha[adapter_name] = alpha
-        self.scaling[adapter_name] = alpha / r
+        self.scaling[adapter_name] = alpha / r  # TODO BEW111: where is this used?
         self.dropout[adapter_name] = torch.nn.Dropout(dropout) if dropout > 0 else torch.nn.Identity()
 
         # Create weights with provided shape
@@ -161,18 +161,27 @@ class LoReftLayer(nn.Module, LycorisLayer):
                     offset = (learned_source(result) - rotated_base) @ rotate_layer.weight  # R^T (Wh + b - Rh)
                     output = result + offset  # \Phi(h) = h + R^T (Wh + b - Rh)
                 else:
+                    # result shape: (batch_size, seq_len, out_features)
                     first_n = self.first_n[active_adapter]
                     last_n = self.last_n[active_adapter]
+                    # loc shape: (list of indices)
                     loc = torch.cat(
                         [
                             # TODO BEW111: see if there's a cleaner way to get the device
                             torch.arange(first_n, device=result.device),
                             torch.arange(result.shape[1] - last_n, result.shape[1], device=result.device),
                         ]
-                    )
-                    selected_results = torch.gather(result, 1, loc)
+                    ).reshape(1, -1)
+                    # selected_results shape: (batch_size, new seq_len, out_features)
+                    # selected_results = torch.gather(result, 1, loc)
+                    selected_results = result[:, loc, :]
+                    # selected_results = torch.index_select(result, dim=1, index=loc)
+                    # rotate_layer weight shape: (out_features, r)
+                    # rotated base shape: (batch_size, new seq_len, r)
                     rotated_base = rotate_layer(selected_results)
+                    # offset shape: (batch_size, new seq_len, out_features)
                     offset = (learned_source(selected_results) - rotated_base) @ rotate_layer.weight
+                    # output shape: (batch_size, seq_len, out_features)
                     output.scatter_(1, loc, offset)
                 output = dropout(output)
         output = output.to(previous_dtype)
